@@ -1,32 +1,90 @@
 # -*- coding: utf-8 -*-
 """
-Module to parse and convert an Wavefront object file (.obj) used for
-radiative transfer simulations (ray tracing) into a comma-separated table.
-The purpose of this module is to allow the loading of an .obj file into
-Python for further data analysis.
+Created on Tue Aug 15 18:23:47 2017
 
-@author: Matheus Boni Vicari (2017)
+@author: Matheus
 """
-
-import pandas as pd
-from itertools import ifilter
 import numpy as np
-from area import poly_area
+from parse_leaf import matmap2facets
+from parse_leaf import parse_foliage
+import pandas as pd
+#from ...utils.geometry import poly_area
+#from ...utils.string import containsAny
 
+import sys
 
-def filter_obj(obj_path, out_file):
-
+sys.path.append('../utils')
+from geometry import poly_area
+#from string import containsAny
+def containsAny(str, set):
     """
-    Function to filter an .obj file, keeping only information containing
-    material bounding boxes that contain vertices.
+    Check whether 'str' contains ANY of the chars in 'set'
+    http://code.activestate.com/recipes/65441-checking-whether-a-string-
+    contains-a-set-of-chars/
     """
 
-    with open(obj_path, 'rb') as f, open(out_file, 'wb') as g:
-        g.writelines(ifilter(lambda line: ('v' in line) | ('usemtl' in line),
-                     f))
+    return 1 in [c in str for c in set]
 
 
-def parse_facets(obj_path):
+def parse_obj_matmap(obj_path, matmap_path=[]):
+
+    # Reading the object file into obj as a single string.
+    with open(obj_path) as f:
+        obj = f.read()
+
+    # Spliting the initial string into clusters by the keyword 'usemtl' which
+    # means that every facet will be separated into a different string.
+    # After splitting the string, filter all generated strings to keep only
+    # those containing vertices information 'v'.
+    facet_str = obj.split('usemtl ')
+    facet_str = [i for i in facet_str if containsAny(i, 'v') is True]
+
+    wood_ids = [i for i, x in enumerate(facet_str) if 'eaf' not in x]
+
+    facet_str = np.array(facet_str)
+
+    wood_df, wood_tri = parse_facets(facet_str[wood_ids])
+
+    leaf_ids = np.array([i for i, x in enumerate(facet_str) if 'eaf' in x])
+
+    matmap = np.load(matmap_path).item()
+    leaf_df_temp, _ = parse_facets(facet_str[leaf_ids])
+    leaf_df, leaf_tri = matmap2facets(leaf_df_temp, matmap)
+
+    df = wood_df.append(leaf_df)
+    tri = np.vstack((wood_tri, (np.max(wood_tri) + leaf_tri + 1)))
+
+    return df, tri
+
+
+def parse_obj_clone(wood_obj_path, foliage_obj_path, leaf_obj_path):
+
+    # Reading the object file into obj as a single string.
+    with open(wood_obj_path) as f:
+        obj = f.read()
+
+    # Spliting the initial string into clusters by the keyword 'usemtl' which
+    # means that every facet will be separated into a different string.
+    # After splitting the string, filter all generated strings to keep only
+    # those containing vertices information 'v'.
+    facet_str = obj.split('usemtl ')
+    facet_str = [i for i in facet_str if containsAny(i, 'v') is True]
+
+    wood_ids = [i for i, x in enumerate(facet_str) if 'eaf' not in x]
+
+    facet_str = np.array(facet_str)
+
+    wood_df, wood_tri = parse_facets(facet_str[wood_ids])
+
+    foliage_df, foliage_tri = parse_foliage(foliage_obj_path, leaf_obj_path)
+
+    df = wood_df.append(foliage_df)
+    tri = np.vstack((wood_tri, (np.max(wood_tri) + foliage_tri + 1)))
+
+    return df, tri
+
+
+def parse_facets(facet_list):
 
     """
     Function to read an object file (.obj) after an initial filtering and
@@ -52,29 +110,21 @@ def parse_facets(obj_path):
 
     """
 
-    # Reading the object file into obj as a single string.
-    with open(obj_path) as f:
-        obj = f.read()
-
-    # Spliting the initial string into clusters by the keyword 'usemtl' which
-    # means that every facet will be separated into a different string.
-    # After splitting the string, filter all generated strings to keep only
-    # those containing vertices information 'v'.
-    facet_str = obj.split('usemtl ')
-    facet_str = [i for i in facet_str if containsAny(i, 'v') is True]
-
     # Initializing variables and allocating space for later user.
-    coords = np.zeros([obj.count('v'), 5])
-    triangles = np.zeros([obj.count('v'), 3])
-    mat = [0] * (obj.count('v'))
+    n_rows = 0
+    for i in facet_list:
+        n_rows = n_rows + i.count('v')
+    coords = np.zeros([n_rows, 5])
+    triangles = np.zeros([n_rows, 3])
+    mat = [0] * (n_rows)
 
     # Looping over every facet string data.
-    for fid in xrange(len(facet_str)):
+    for fid in xrange(len(facet_list)):
         # Setting the base_id that represents the initial DataFrame row to
         # assign the current facet's information.
         base_id = fid * 3
         # Spliting the current facet info by lines.
-        temp = facet_str[fid].split('\n')
+        temp = facet_list[fid].split('\n')
         # Filtering all substring (lines) and obtaining the vertices 'v' data.
         c = [i for i in temp[1:] if containsAny(i, 'v')]
 
@@ -122,13 +172,3 @@ def parse_facets(obj_path):
     df = pd.concat([df, material], axis=1)
 
     return df, triangles
-
-
-def containsAny(str, set):
-    """
-    Check whether 'str' contains ANY of the chars in 'set'
-    http://code.activestate.com/recipes/65441-checking-whether-a-string-
-    contains-a-set-of-chars/
-    """
-
-    return 1 in [c in str for c in set]

@@ -6,8 +6,8 @@ Module to import and convert a .hips material image into a material map.
 """
 
 import numpy as np
-from skimage import feature
 from scipy.spatial import Delaunay
+from skimage import feature
 
 
 def generate_map(img, datum=[512, 0], grid_size=10):
