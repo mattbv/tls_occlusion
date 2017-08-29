@@ -24,6 +24,9 @@ def correct(point_cloud, axis_order=[0, 1, 2], dist_from_center=0):
         Nx3 corrected point cloud coordinates.
 
     """
+    
+    if type(axis_order) != list:
+        axis_order = list(axis_order)
 
     # Adding the fixed distance to x and y.
     x = point_cloud[:, axis_order[0]] + dist_from_center

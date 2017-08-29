@@ -8,22 +8,8 @@ import numpy as np
 from parse_leaf import matmap2facets
 from parse_leaf import parse_foliage
 import pandas as pd
-#from ...utils.geometry import poly_area
-#from ...utils.string import containsAny
-
-import sys
-
-sys.path.append('../utils')
-from geometry import poly_area
-#from string import containsAny
-def containsAny(str, set):
-    """
-    Check whether 'str' contains ANY of the chars in 'set'
-    http://code.activestate.com/recipes/65441-checking-whether-a-string-
-    contains-a-set-of-chars/
-    """
-
-    return 1 in [c in str for c in set]
+from ..utils.geometry import poly_area
+from ..utils.string import containsAny
 
 
 def parse_obj_matmap(obj_path, matmap_path=[]):

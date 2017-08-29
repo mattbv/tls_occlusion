@@ -13,25 +13,10 @@ from itertools import izip
 from parse_geometry import cylinder
 from parse_geometry import sphere
 import pandas as pd
-#from ...utils.string import containsAny
-#from ...utils.geometry import project
-#from ...utils.geometry import poly_area
+from ..utils.string import containsAny
+from ..utils.geometry import project
+from ..utils.geometry import poly_area
 
-import sys
-
-sys.path.append('../utils')
-from geometry import project
-from geometry import poly_area
-
-
-def containsAny(str, set):
-    """
-    Check whether 'str' contains ANY of the chars in 'set'
-    http://code.activestate.com/recipes/65441-checking-whether-a-string-
-    contains-a-set-of-chars/
-    """
-
-    return 1 in [c in str for c in set]
 
 def matmap2facets(facets, matmap):
 

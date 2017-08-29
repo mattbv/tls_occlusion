@@ -19,6 +19,9 @@ from utils.point_cloud import correct
 
 
 def matmap2facets():
+    
+    p = parse_args()
+    result_folder = os.path.join(p.result_folder, '')
 
     filename = os.path.basename(p.img_file).split('.')[:-1]
 
@@ -37,6 +40,9 @@ def convert_hips():
     fname = hips file name
 
     """
+    
+    p = parse_args()
+    result_folder = os.path.join(p.result_folder, '')
 
     filename = os.path.basename(p.hips_file).split('.')[:-1]
 
@@ -47,6 +53,9 @@ def convert_hips():
 
 
 def parse_obj_matmap():
+    
+    p = parse_args()
+    result_folder = os.path.join(p.result_folder, '')
 
     filename = os.path.basename(p.obj_file).split('.')[:-1]
 
@@ -56,6 +65,9 @@ def parse_obj_matmap():
 
 
 def parse_obj_clone():
+    
+    p = parse_args()
+    result_folder = os.path.join(p.result_folder, '')
 
     filename = os.path.basename(p.obj_file).split('.')[:-1].split('_wood')[0]
 
@@ -66,10 +78,15 @@ def parse_obj_clone():
 
 
 def pc_correction():
-
+    
+    p = parse_args()
+    result_folder = os.path.join(p.result_folder, '')
+    
+    arr = np.loadtxt(p.point_cloud, delimiter=",")
+    
     filename = os.path.basename(p.point_cloud).split('.')[:-1]
 
-    corrected_pc = correct(p.point_cloud, axis_order=p.corr_axis,
+    corrected_pc = correct(arr, axis_order=p.corr_axis,
                            dist_from_center=p.corr_dist)
 
     np.savetxt('%s%s.txt' % (result_folder, filename), corrected_pc,
@@ -77,13 +94,16 @@ def pc_correction():
 
 
 def batch_pc_correction():
+    
+    p = parse_args()
+    result_folder = os.path.join(p.result_folder, '')
 
     pc_folder = os.path.join(p.point_cloud_folder, '')
     files = glob.glob(pc_folder + '*.txt')
 
     for f in files:
-        arr = np.loadtxt(f)
-        filename = os.path.basename(p.obj_file).split('.')[:-1]
+        arr = np.loadtxt(f, delimiter=",")
+        filename = os.path.basename(f).split('.')[:-1][0]
         corrected_pc = correct(arr, axis_order=p.corr_axis,
                                dist_from_center=p.corr_dist)
         np.savetxt('%s%s.txt' % (result_folder, filename), corrected_pc,
@@ -91,16 +111,20 @@ def batch_pc_correction():
 
 
 def match_pf():
+    
+    p = parse_args()
+    result_folder = os.path.join(p.result_folder, '')
 
     fname_obj = os.path.basename(p.facets).split('.')[:-1].split('_wood')[0]
     fname_pc = os.path.basename(p.point_cloud).split('.')[:-1]
 
     facets, pc_df = pfmatch(p.facets, p.point_cloud)
+    pc_df.index.name = 'point_id'
 
     facets.to_csv(('%s%s-%s_macthed_facets_.csv' % (result_folder,
                                                     fname_obj, fname_pc)))
-    pc_df.to_csv(('%s%s-%s_macthed_points_.csv' % (result_folder,
-                                                   fname_pc, fname_obj)))
+    pc_df.to_csv(('%s%s_macthed_points_.csv' % (result_folder,
+                                                fname_pc)))
 
 
 def batch_match_pf():
@@ -114,15 +138,17 @@ def batch_match_pf():
         fname_pc = os.path.basename(f).split('.')[:-1]
         arr = np.loadtxt(f)
         facets, pc_df = pfmatch(p.facets, arr)
+        pc_df.index.name = 'point_id'
 
         facets.to_csv(('%s%s-%s_macthed_facets_.csv' % (result_folder,
                                                         fname_obj, fname_pc)))
-        pc_df.to_csv(('%s%s-%s_macthed_points_.csv' % (result_folder,
-                                                       fname_pc, fname_obj)))
+        pc_df.to_csv(('%s%s_macthed_points_.csv' % (result_folder,
+                                                    fname_pc)))
 
 
-if __name__ == '__main__':
+def parse_args():
     parser = argparse.ArgumentParser()
+    
     parser.add_argument("-o", "--obj", dest="obj_file", help="single object\
  file.", metavar="FILE")
     parser.add_argument("--obj_folder", dest="obj_folder",
@@ -141,10 +167,11 @@ if __name__ == '__main__':
  image file.", metavar="FILE")
     parser.add_argument("--grid_size", dest="grid_size", type=int, default=10,
                         help="grid size for the material image downsampling")
-    parser.add_argument("--correction_dist", dest="corr_dist", type=float,
+    parser.add_argument("--correction_dist", dest="corr_dist", type=int,
                         help="distance correction to match the point cloud with\
- the object.")
-    parser.add_argument("--correction_axis", dest="corr_axis",
+ the object.", default=0)
+    parser.add_argument("--correction_axis", dest="corr_axis", type=int,
+                        nargs='+',
                         help="axis order correction to match the point cloud\
  with the object.")
     parser.add_argument("--datum", dest="datum", type=int, nargs='+',
@@ -164,5 +191,11 @@ if __name__ == '__main__':
  file converted to facets (.csv).", metavar="FILE")
 
     p = parser.parse_args()
+    
+    return p
 
+    
+if __name__ == '__main__':
+
+    p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
