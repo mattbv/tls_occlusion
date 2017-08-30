@@ -5,11 +5,11 @@ Module to manage the command line execution of the package.
 @author: Matheus Boni Vicari (2017)
 """
 
-import matplotlib.pyplot as plt
 import argparse
 import glob
 import os
 import numpy as np
+import pandas as pd
 from parser.hips import read_hips
 from parser.material_map import generate_map
 from parser.obj_parser import parse_obj_matmap as p_matmap
@@ -22,34 +22,46 @@ def matmap2facets():
     
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
-
-    filename = os.path.basename(p.img_file).split('.')[:-1]
-
-    distmap, tri = generate_map(p.img_file, datum=p.datum,
-                                grid_size=p.grid_size)
-
-    np.save(('%s%s_distmap_%s_.npy' % (result_folder, filename, p.grid_size)),
-            distmap)
-    np.save(('%s%s_triangulation_%s_.npy' % (result_folder, filename,
-                                             p.grid_size)), tri)
-
-
-def convert_hips():
-
-    """
-    fname = hips file name
-
-    """
+    filename = os.path.basename(p.hips_file).split('.')[:-1][0]
+ 
+    hips, res_x, res_y, fmt = read_hips(p.hips_file)
+ 
+    img_u = np.triu(hips)
+    img_l = np.tril(hips)
+ 
+    d1 = [0, hips.shape[1]]
+    d2 = [hips.shape[0], 0]
+ 
+    map_l, tri_l = generate_map(img_l, datum=d1, grid_size=p.grid_size)
+    map_u, tri_u = generate_map(img_u, datum=d2, grid_size=p.grid_size)
+ 
+    area_ratio = (((np.sum(img_l) + np.sum(img_u))/255).astype(float) /
+                  (img_l.shape[0] * img_l.shape[1]))
+ 
+    matmap = {'distmap': {'lower': map_l, 'upper': map_u},
+              'triangles': {'lower': tri_l, 'upper': tri_u},
+              'area_ratio': area_ratio}
+ 
+    np.save(('%s%s_matmap_%s_.npy' % (result_folder, filename, p.grid_size)),
+            matmap)
     
-    p = parse_args()
-    result_folder = os.path.join(p.result_folder, '')
-
-    filename = os.path.basename(p.hips_file).split('.')[:-1]
-
-    img, res_x, res_y, fmt = read_hips(p.hips_file)
-    plt.imshow(img)
-    plt.imsave('%s%s.png' % (result_folder, filename))
-    plt.close()
+    
+#def convert_hips():
+#
+#    """
+#    fname = hips file name
+#
+#    """
+#    
+#    p = parse_args()
+#    result_folder = os.path.join(p.result_folder, '')
+#
+#    filename = os.path.basename(p.hips_file).split('.')[:-1][0]
+#
+#    img, res_x, res_y, fmt = read_hips(p.hips_file)
+#    plt.imshow(img)
+#    plt.imsave('%s%s.png' % (result_folder, filename), img)
+#    plt.close()
 
 
 def parse_obj_matmap():
@@ -57,7 +69,7 @@ def parse_obj_matmap():
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
 
-    filename = os.path.basename(p.obj_file).split('.')[:-1]
+    filename = os.path.basename(p.obj_file).split('.')[:-1][0]
 
     obj_dataframe, obj_tri = p_matmap(p.obj_file, p.matmap_file)
     obj_dataframe.to_csv(('%s%s_obj_facets_.csv' % (result_folder, filename)))
@@ -84,13 +96,13 @@ def pc_correction():
     
     arr = np.loadtxt(p.point_cloud, delimiter=",")
     
-    filename = os.path.basename(p.point_cloud).split('.')[:-1]
+    filename = os.path.basename(p.point_cloud).split('.')[:-1][0]
 
     corrected_pc = correct(arr, axis_order=p.corr_axis,
                            dist_from_center=p.corr_dist)
 
     np.savetxt('%s%s.txt' % (result_folder, filename), corrected_pc,
-               fmt='%1.3f')
+               fmt='%1.3f', delimiter=',')
 
 
 def batch_pc_correction():
@@ -107,7 +119,7 @@ def batch_pc_correction():
         corrected_pc = correct(arr, axis_order=p.corr_axis,
                                dist_from_center=p.corr_dist)
         np.savetxt('%s%s.txt' % (result_folder, filename), corrected_pc,
-                   fmt='%1.3f')
+                   fmt='%1.3f', delimiter=',')
 
 
 def match_pf():
@@ -115,33 +127,37 @@ def match_pf():
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
 
-    fname_obj = os.path.basename(p.facets).split('.')[:-1].split('_wood')[0]
-    fname_pc = os.path.basename(p.point_cloud).split('.')[:-1]
+    fname_pc = os.path.basename(p.point_cloud).split('.')[:-1][0]
 
-    facets, pc_df = pfmatch(p.facets, p.point_cloud)
+    facets_df = pd.read_csv(p.facets)
+
+    facets, pc_df = pfmatch(facets_df, p.point_cloud)
     pc_df.index.name = 'point_id'
 
-    facets.to_csv(('%s%s-%s_macthed_facets_.csv' % (result_folder,
-                                                    fname_obj, fname_pc)))
+    facets.to_csv(('%s%s_macthed_facets_.csv' % (result_folder,
+                                                 fname_pc)))
     pc_df.to_csv(('%s%s_macthed_points_.csv' % (result_folder,
                                                 fname_pc)))
 
 
 def batch_match_pf():
 
+    p = parse_args()
+    result_folder = os.path.join(p.result_folder, '')
+
     pc_folder = os.path.join(p.point_cloud_folder, '')
     files = glob.glob(pc_folder + '*.txt')
-
-    fname_obj = os.path.basename(p.facets).split('.')[:-1]
+    
+    facets_df = pd.read_csv(p.facets)
 
     for f in files:
-        fname_pc = os.path.basename(f).split('.')[:-1]
-        arr = np.loadtxt(f)
-        facets, pc_df = pfmatch(p.facets, arr)
+        fname_pc = os.path.basename(f).split('.')[:-1][0]
+        arr = np.loadtxt(f, delimiter=',')
+        facets, pc_df = pfmatch(facets_df, arr)
         pc_df.index.name = 'point_id'
 
-        facets.to_csv(('%s%s-%s_macthed_facets_.csv' % (result_folder,
-                                                        fname_obj, fname_pc)))
+        facets.to_csv(('%s%s_macthed_facets_.csv' % (result_folder,
+                                                        fname_pc)))
         pc_df.to_csv(('%s%s_macthed_points_.csv' % (result_folder,
                                                     fname_pc)))
 
