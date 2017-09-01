@@ -19,122 +19,178 @@ from utils.point_cloud import correct
 
 
 def matmap2facets():
-    
+
+    """
+    Script to convert a material map of a leaf to facet notation/format.
+
+    """
+
+    # Parse input arguments, correct result output folder (if necessary)
+    # and gets filename for result file.
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
     filename = os.path.basename(p.hips_file).split('.')[:-1][0]
- 
+
+    # Reading material map hips file.
     hips, res_x, res_y, fmt = read_hips(p.hips_file)
- 
+
+    # Obtaining upper and lower triangle of material map image.
+    # This aims to replicate how the object file presents a leaf facet to map
+    # the material later.
     img_u = np.triu(hips)
     img_l = np.tril(hips)
- 
+
+    # Generate image origin coordinates for upper and lower triangles.
     d1 = [0, hips.shape[1]]
     d2 = [hips.shape[0], 0]
- 
+
+    # Generating map for upper and lower triangles.
     map_l, tri_l = generate_map(img_l, datum=d1, grid_size=p.grid_size)
     map_u, tri_u = generate_map(img_u, datum=d2, grid_size=p.grid_size)
- 
+
+    # Calculating area ratio for material map. This ratio will be later used
+    # to correct different facets  area (in foliage object file).
     area_ratio = (((np.sum(img_l) + np.sum(img_u))/255).astype(float) /
                   (img_l.shape[0] * img_l.shape[1]))
- 
+
+    # Creating material map dictionary.
     matmap = {'distmap': {'lower': map_l, 'upper': map_u},
               'triangles': {'lower': tri_l, 'upper': tri_u},
               'area_ratio': area_ratio}
- 
+
+    # Saving material map dictionary as numpy file.
     np.save(('%s%s_matmap_%s_.npy' % (result_folder, filename, p.grid_size)),
             matmap)
-    
-    
-#def convert_hips():
-#
-#    """
-#    fname = hips file name
-#
-#    """
-#    
-#    p = parse_args()
-#    result_folder = os.path.join(p.result_folder, '')
-#
-#    filename = os.path.basename(p.hips_file).split('.')[:-1][0]
-#
-#    img, res_x, res_y, fmt = read_hips(p.hips_file)
-#    plt.imshow(img)
-#    plt.imsave('%s%s.png' % (result_folder, filename), img)
-#    plt.close()
 
 
 def parse_obj_matmap():
-    
+
+    """
+    Script to parse an object file (in notation used for librat) to a facet
+    notation with .csv format. This script should be used for cases where a
+    material map is used in the foliage portion of the object file.
+
+    """
+
+    # Parse input arguments, correct result output folder (if necessary)
+    # and gets filename for result file.
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
-
     filename = os.path.basename(p.obj_file).split('.')[:-1][0]
 
+    # Parsing object file. p_matmat will apply material map (created from
+    # .hips file) onto foliage object file and the join this latter to
+    # original wood facets.
     obj_dataframe, obj_tri = p_matmap(p.obj_file, p.matmap_file)
+    # Saving results.
     obj_dataframe.to_csv(('%s%s_obj_facets_.csv' % (result_folder, filename)))
     np.save('%s%s_triangulation.npy' % (result_folder, filename), obj_tri)
 
 
 def parse_obj_clone():
-    
+
+    """
+    Script to parse an object file (in notation used for librat) to a facet
+    notation with .csv format. This script should be used for cases where the
+    foliage portion is composed by cloned/transformed leaf objects.
+
+    """
+
+    # Parse input arguments, correct result output folder (if necessary)
+    # and gets filename for result file.
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
-
     filename = os.path.basename(p.obj_file).split('.')[:-1].split('_wood')[0]
 
+    # Parsing object file. p_clone will interpret clone/transform statements,
+    # apply them onto leaf object and the join this latter to
+    # original wood facets.
     obj_dataframe, obj_tri = p_clone(p.wood_obj_file, p.foliage_obj_file,
                                      p.leaf_obj_file)
+    # Saving results.
     obj_dataframe.to_csv(('%s%s_obj_facets_.csv' % (result_folder, filename)))
     np.save('%s%s_triangulation.npy' % (result_folder, filename), obj_tri)
 
 
 def pc_correction():
-    
+
+    """
+    Script to correct a point cloud by swapping axes (if set to) or
+    changing horizontal distance on x and y axis (if set to).
+
+    """
+
+    # Parse input arguments, correct result output folder (if necessary)
+    # and gets filename for result file.
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
-    
-    arr = np.loadtxt(p.point_cloud, delimiter=",")
-    
     filename = os.path.basename(p.point_cloud).split('.')[:-1][0]
 
+    # Loading point cloud.
+    arr = np.loadtxt(p.point_cloud, delimiter=",")
+
+    # Applying correction.
     corrected_pc = correct(arr, axis_order=p.corr_axis,
                            dist_from_center=p.corr_dist)
 
+    # Saving results.
     np.savetxt('%s%s.txt' % (result_folder, filename), corrected_pc,
                fmt='%1.3f', delimiter=',')
 
 
 def batch_pc_correction():
-    
+
+    """
+    Script to batch correct a series of point clouds by swapping axes
+    (if set to) or changing horizontal distance on x and y axis (if set to).
+
+    """
+
+    # Parse input arguments and correct result output folder (if necessary).
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
 
+    # Correcting point cloud folder (if necessary) and obtaining list of
+    # files to load.
     pc_folder = os.path.join(p.point_cloud_folder, '')
     files = glob.glob(pc_folder + '*.txt')
 
+    # Looping over files to load.
     for f in files:
+        # Loading point cloud.
         arr = np.loadtxt(f, delimiter=",")
+        # Getting filename for result file.
         filename = os.path.basename(f).split('.')[:-1][0]
+        # Applying correction.
         corrected_pc = correct(arr, axis_order=p.corr_axis,
                                dist_from_center=p.corr_dist)
+        # Saving results.
         np.savetxt('%s%s.txt' % (result_folder, filename), corrected_pc,
                    fmt='%1.3f', delimiter=',')
 
 
 def match_pf():
-    
+
+    """
+    Script to match a point cloud to a facet model of an object file.
+
+    """
+
+    # Parse input arguments, correct result output folder (if necessary)
+    # and gets filename for result file.
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
-
     fname_pc = os.path.basename(p.point_cloud).split('.')[:-1][0]
 
+    # Reading facets file.
     facets_df = pd.read_csv(p.facets)
 
+    # Running match and setting index name.
     facets, pc_df = pfmatch(facets_df, p.point_cloud)
     pc_df.index.name = 'point_id'
 
-    facets.to_csv(('%s%s_macthed_facets_.csv' % (result_folder,
+    # Saving results.
+    facets.to_csv(('%s%s_matched_facets_.csv' % (result_folder,
                                                  fname_pc)))
     pc_df.to_csv(('%s%s_macthed_points_.csv' % (result_folder,
                                                 fname_pc)))
@@ -142,29 +198,55 @@ def match_pf():
 
 def batch_match_pf():
 
+    """
+    Batch script to match a series of point clouds to a facet model of an
+    object file.
+
+    """
+
+    # Parse input arguments and correct result output folder (if necessary).
     p = parse_args()
     result_folder = os.path.join(p.result_folder, '')
 
+    # Correcting point cloud folder (if necessary) and obtaining list of
+    # files to load.
     pc_folder = os.path.join(p.point_cloud_folder, '')
     files = glob.glob(pc_folder + '*.txt')
-    
+
+    # Reading facets file.
     facets_df = pd.read_csv(p.facets)
 
+    # Looping over files to load.
     for f in files:
-        fname_pc = os.path.basename(f).split('.')[:-1][0]
+        # Loading point cloud.
         arr = np.loadtxt(f, delimiter=',')
+
+        # Getting filename for result file.
+        fname_pc = os.path.basename(f).split('.')[:-1][0]
+
+        # Running match and setting index name.
         facets, pc_df = pfmatch(facets_df, arr)
         pc_df.index.name = 'point_id'
 
-        facets.to_csv(('%s%s_macthed_facets_.csv' % (result_folder,
-                                                        fname_pc)))
+        # Saving results.
+        facets.to_csv(('%s%s_matched_facets_.csv' % (result_folder,
+                                                     fname_pc)))
         pc_df.to_csv(('%s%s_macthed_points_.csv' % (result_folder,
                                                     fname_pc)))
 
 
 def parse_args():
+
+    """
+    Function to create an argument parser to be used when a script is called
+    from the command line.
+
+    """
+
+    # Creating parser object.
     parser = argparse.ArgumentParser()
-    
+
+    # Adding arguments to parser.
     parser.add_argument("-o", "--obj", dest="obj_file", help="single object\
  file.", metavar="FILE")
     parser.add_argument("--obj_folder", dest="obj_folder",
@@ -206,11 +288,12 @@ def parse_args():
     parser.add_argument("--facets_file", dest="facets", help="processed obj\
  file converted to facets (.csv).", metavar="FILE")
 
+    # Parsing arguments to p.
     p = parser.parse_args()
-    
+
     return p
 
-    
+
 if __name__ == '__main__':
 
     p = parse_args()

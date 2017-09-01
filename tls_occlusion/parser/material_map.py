@@ -194,9 +194,11 @@ def constrained_triangulation(points):
         Set of vertices coordinates used in the triangulation.
 
     """
-
+    
+    # Triangulating input points.
     tri = Delaunay(points)
 
+    # Obtaining vertices of triangulation.
     sim = tri.simplices
     vert = points[sim]
 
