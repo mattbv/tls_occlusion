@@ -186,6 +186,11 @@ def match_pf():
     facets_df = pd.read_csv(p.facets)
 
     # Running match and setting index name.
+    try:
+        points = np.loadtxt(p.point_cloud, delimiter=',')
+    except:
+        points = np.loadtxt(p.point_cloud, delimiter=' ')
+
     facets, pc_df = pfmatch(facets_df, p.point_cloud)
     pc_df.index.name = 'point_id'
 

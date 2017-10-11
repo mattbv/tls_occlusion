@@ -9,8 +9,8 @@ import numpy as np
 from pandas import DataFrame
 from collections import defaultdict
 from utils import geometry as geo
-from utils import point_cloud as pc
 from utils import bbox
+import pandas as pd
 
 
 def pfmatch(facets, point_cloud):
@@ -75,12 +75,19 @@ def assign_facets(points, facets):
     # information.
     pc_dict = defaultdict(list)
     pc_df = DataFrame(columns=['facet', 'dist'])
+    pc_arr = np.zeros([points.shape[0], 2])
+
+    coords = np.array(facets.ix[:, 'vx':'vz']).astype(np.float)
+    facs = {}
+    for f in facets.groupby('facet'):
+        # Getting the facet vertices coordinates.
+        facs[f[0]] = coords[f[1].ix[:, 0]]
 
     # Looping over each facet.
     for f in facets.groupby('facet'):
 
         # Getting the facet vertices coordinates.
-        fcoord = np.array(f[1].ix[:, 'vx':'vz']).astype(np.float)
+        fcoord = coords[f[1].ix[:, 0]]
 
         # Generating a bounding box around the facet vertices.
         min_x = np.min(fcoord[:, 0])
@@ -97,46 +104,43 @@ def assign_facets(points, facets):
         # Looping over every point inside the Bbox and appending the currenct
         # facet id into the point id in pc_dict.
         for id_ in inidx:
-            pc_dict[id_].append(f[0])
+            pc_dict[id_].append(f[0].astype(int))
 
     # Looping all over point cloud dictionary keys.
-    for p in pc_dict.keys():
+    for p, f in pc_dict.iteritems():
 
         # Initializing mindist and f_id.
         mindist = np.inf
         f_id = np.nan
 
-        # Looping over all facets for the current key in pc_dict.
-        for f in pc_dict[p]:
-            # Setting the current facet as the temporary facet for the
-            # current point id (key).
-            tfacet = facets[facets['facet'] == f]
+        unique_facets = np.unique(f)
 
-            # Selecting current facet vertices coordinates.
-            fcoord = np.array(tfacet.ix[:, 'vx':'vz']).astype(np.float)
+        for u in unique_facets:
 
-            # Testing if point is inside the current facet.
-            # This option is currently not used as the complexity of the
-            # leaf material makes it fail to function properly.
-#            test = geo.point_in_facet(points[p], fcoord)
-            test = 1
+            fcoord = facs[u]
 
-            # Checking if test is True.
-            if test:
-                # Calculating the distance of facet 'f' to point 'p'.
-                fdist = geo.dist_to_plane(points[p], fcoord)
+            for j in range(0, fcoord.shape[0], 3):
 
-                # Testing if current distance is smaller the minimum distance.
-                # This steps is designed to select only the closest facet to
-                # current point 'p'.
-                if abs(fdist) <= abs(mindist):
-                    # Set facet id as current facet 'f' and 'mindist' to
-                    # current calculated dist of 'fdist'.
-                    f_id = f
-                    mindist = fdist
+                ft = fcoord[j:j+3, :]
+
+                if ft.shape[0] == 3:
+                    # Calcu lating the distance of facet 'f' to point 'p'.
+                    fdist = geo.dist_to_plane(points[p], ft)
+
+                    # Testing if current distance is smaller the minimum
+                    # distance.
+                    # This steps is designed to select only the closest facet
+                    # to current point 'p'.
+                    if abs(fdist) <= abs(mindist):
+                        # Set facet id as current facet 'f' and 'mindist' to
+                        # current calculated dist of 'fdist'.
+                        f_id = u
+                        mindist = abs(fdist)
+
+        pc_arr[p, 0] = f_id
+        pc_arr[p, 1] = mindist
 
         # Assigning values for column 'facet' and 'dist'.
-        pc_df.set_value(p, 'facet', f_id)
-        pc_df.set_value(p, 'dist', mindist)
+        pc_df = pd.DataFrame(pc_arr, columns=['facet', 'dist'])
 
     return pc_df
